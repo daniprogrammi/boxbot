@@ -1,15 +1,14 @@
 import socket
 import os, sys, re
-from twitch_commands import *
 from twitchio.ext import commands
 from ansimarkup import ansiprint as print
 import urllib
+import asyncio
 import simpleobsws
 import random
 import glob
-from twitch_to_obs import *
 import json
-import chatters
+from controller_to_obs import TwitchController 
 
 # TODO: 
 #   user profiles --- info given by viewers that can be queried by everyone
@@ -59,25 +58,24 @@ OBS_RANDOM_MEDIA_ROOT = (
 
 
 
-COMMAND_LIST = {
-        "twitter_test": twitter_cmd,
-        "box": box_cmd,
-        "donate": donate_cmd,
-        "hug": hug_cmd,
-        "addtobox": add_to_box_cmd,
-        "addtoarchive": archive_quote_cmd,
-        "toggleDB": toggle_DyBrowse_cmd,
-        "refresh_cam": cam_refresh_cmd,
-        "display": display_random_media,
-        }
-
-MOD_ONLY_CMDS = {
-        "addtobox": add_to_box_cmd,
-        "addtoarchive": archive_quote_cmd,
-        "toggleDB": toggle_DyBrowse_cmd,
-        }
-
-ME_ONLY_CMDS = {"refresh_cam": cam_refresh_cmd, "display": display_random_media}
+#COMMAND_LIST = {
+#        "box": box_cmd,
+#        "donate": donate_cmd,
+#        "hug": hug_cmd,
+#        "addtobox": add_to_box_cmd,
+#        "addtoarchive": archive_quote_cmd,
+#        "toggleDB": toggle_DyBrowse_cmd,
+#        "refresh_cam": cam_refresh_cmd,
+#        "display": display_random_media,
+#        }
+#
+#MOD_ONLY_CMDS = {
+#        "addtobox": add_to_box_cmd,
+#        "addtoarchive": archive_quote_cmd,
+#        "toggleDB": toggle_DyBrowse_cmd,
+#        }
+#
+#ME_ONLY_CMDS = {"refresh_cam": cam_refresh_cmd, "display": display_random_media}
 
 
 def missing_env_var(var_name):
@@ -117,6 +115,7 @@ class Bot(commands.Bot):
         
         self.requests = {'count': 0}
 
+
     async def initialize_obsws(self, ctx):
         print(f"initializing obs with loop: {self.loop}")
         self.obs_ws = simpleobsws.obsws(
@@ -125,12 +124,14 @@ class Bot(commands.Bot):
                 password=os.environ["PASSWORD"]
                 #loop=self.loop
                 )
-        self.loop.create_task(self.obs_ws.connect())
+        #self.loop.create_task(self.obs_ws.connect())
+        await self.obs_ws.connect()
         return
 
     async def event_ready(self):
         print(f"Ready | {self.nick}")
         await self.initialize_obsws(None)
+        await self.twitch_controller()
 
     async def event_message(self, message):
         print(f"#{message.author.name}: {message.content}")
@@ -161,14 +162,15 @@ class Bot(commands.Bot):
     #                        OBS Commands/ Helpers                                  #
     ############################################################################
 
-    async def make_request(self, request, data):
-        result = await self.loop.create_task(
-                self.obs_ws.call(
-                    request, data
-                    ))  # Make a request with the given data
-                print("Request returned: ", result)
+    async def make_request(self, request, data, verbose=False):
+        if data:
+            result = await self.loop.create_task(self.obs_ws.call(request, data))
+        else:
+            result = await self.loop.create_task(self.obs_ws.call(request)) # Does this need to be create_task
+            # Make a request with the given data
+        if verbose:
+            print("Request returned: ", result)
         return result
-
 
     async def toggle_src(self, sourceName, sceneName=None):
         # Get source property, check if render is True if it is set render to false, else true
@@ -193,6 +195,46 @@ class Bot(commands.Bot):
         result = await self.make_request(request, data)
         return
 
+    async def get_current_scene_items(self):
+        request = "GetCurrentScene"
+        result = await self.make_request(request)
+        return result
+
+    async def move_scene_item(self, sourceName, new_x, new_y):
+        request = "SetSceneItemProperties"
+        data = {"item": sourceName, "position": {"x":new_x, "y":new_y}}
+        result = await self.make_request(request, data)
+        return        
+
+    async def twitch_controller(self):
+        controller = TwitchController()
+        sourceName = "HDCAM_Plain"
+        current_scene_items = await self.get_current_scene_items()
+        print("Sources?", current_scene_items['sources'])
+        print("Items")
+
+        vals_generator = controller.joystick_source()
+        async for vals in vals_generator:
+            # TODO: Add/Subtract from original position
+            # Numpy, batch requests
+            
+            await self.move_scene_item(sourceName, vals[0], vals[1])
+
+        #TODO: stuff with the switch to cycle through sources
+        return
+
+    async def set_browser_src(self, sourceName, newurl):
+        request = "SetSourceSettings"
+        data = {"sourceName": sourceName, "sourceSettings": {"url": newurl}}
+        result = await self.make_request(request, data)
+        return
+ 
+
+    ############################################################################
+    #                         Twitch Commands                                  #
+    ############################################################################
+   
+    
     @commands.check(is_mod)
     @commands.command(name='set_visible')
     async def set_visible(self, ctx=None, sceneItem=None, boolean=True):
@@ -207,14 +249,18 @@ class Bot(commands.Bot):
         result = await self.make_request(request, {'item': sceneItem, 'visible': boolean})
         return
 
-    ############################################################################
-    #                         Twitch Commands                                  #
-    ############################################################################
-    async def set_browser_src(self, sourceName, newurl):
-        request = "SetSourceSettings"
-        data = {"sourceName": sourceName, "sourceSettings": {"url": newurl}}
-        result = await self.make_request(request, data)
+    @commands.command(name="get_position")
+    async def get_src_position(self, ctx):
+        content = ctx.message.content.split()
+        sourceName = content[1]
+        data = {"item":sourceName}
+
+        result = await self.make_request("GetSceneItemProperties", data)
+
+        print(f"type:{type(result)}, result:{(result)}")
+        ctx.send(f"x:{result['position']['x']}, y:{result['position']['y']}")
         return
+
 
     # If args passed in then this is a "setter" command
     #   if setter it must be set by the user themselves (or a mod)
@@ -226,6 +272,9 @@ class Bot(commands.Bot):
     #      ✓ or create my own decorator
     # TODO Create my own decorator in the User class which checks if the 
     #       command string is a username and then sets, may call Twitchio.command directly afterwards
+    def _is_command_username(function):
+        @wraps(function)
+
     @commands.command(name="set")
     async def user_cmd(self, ctx):
         # TODO: check if user is in db, load existing user_obj if so,
@@ -243,15 +292,15 @@ class Bot(commands.Bot):
         #> "Dani"
         return 
 
-   @commands.command(name="project"):
-       async def project(self, ctx):
-           await ctx.send("I'm working on my Twitchbot! Breaking things and whatnot")
+    @commands.command(name="project")
+    async def project(self, ctx):
+        await ctx.send("I'm working on an Arduino controller for OBS! Breaking things and whatnot")
         return
 
     @commands.command(name="discord")
     async def discord(self, ctx):
         await ctx.send("Join my discord! [Put pressure on me to maintain it] https://discord.gg/4RXASvcG6k")
-         return 
+        return 
 
     # Events don't need decorators when subclassed
     @commands.command(name="role")
@@ -295,6 +344,8 @@ class Bot(commands.Bot):
         for message in message_set:
             await ctx.send(message)
 
+        return
+
     @commands.command(name="hug")
     async def hug_cmd(self, ctx):
         content = ctx.message.content.split()
@@ -332,6 +383,10 @@ class Bot(commands.Bot):
             return None
         else:
             return None
+    @commands.command(name="foxdoc")
+    async def send_foxdot_docs(self, ctx):
+        await ctx.send("https://foxdot.org/docs/")
+        return
 
     # Show a link on stream
     @commands.command(name="link")
