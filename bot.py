@@ -9,6 +9,8 @@ import random
 import glob
 import json
 from controller_to_obs import TwitchController 
+import functools
+from chatters import Users
 
 # TODO: 
 #   user profiles --- info given by viewers that can be queried by everyone
@@ -135,7 +137,23 @@ class Bot(commands.Bot):
 
     async def event_message(self, message):
         print(f"#{message.author.name}: {message.content}")
+        # check if it's a message that is a username
         await self.handle_commands(message)
+    
+    @bot.event
+    async def on_command_error(self, ctx, error):
+        if isinstance(error, errors.CommandNotFound):
+            username = message.content.split()[0].lstrip("!")
+            if username == message.author.display_name and len(message.content.split()) > 1:
+                await self.user_setter(self, message) 
+            elif username == message.author.display_name and len(message.content.split()) == 1: 
+                # TODO: getter
+                print("Gonna do something with this later I promise omg pls")
+                pass
+            # Someone who is not the user themselves wants to see their info
+            else:
+                print("Invalid call for the moment")
+        return
 
     # TODO: Event Listeners
     async def on_event(self, data):
@@ -197,8 +215,9 @@ class Bot(commands.Bot):
 
     async def get_current_scene_items(self):
         request = "GetCurrentScene"
-        result = await self.make_request(request)
-        return result
+        sceneName = await self.make_request(request, None)
+        scene_item_list = sceneName['sources']
+        return scene_item_list
 
     async def move_scene_item(self, sourceName, new_x, new_y):
         request = "SetSceneItemProperties"
@@ -208,19 +227,31 @@ class Bot(commands.Bot):
 
     async def twitch_controller(self):
         controller = TwitchController()
-        sourceName = "HDCAM_Plain"
+        # TODO: obs-websocket protocol ahead of simpleobsws
         current_scene_items = await self.get_current_scene_items()
-        print("Sources?", current_scene_items['sources'])
-        print("Items")
+        current_scene_items = [{'name':item['name'], 'x':item['x'], 'y':item['y']} for item in current_scene_items if item['render'] is True] 
+        # move index when joystick is hit
+        sourceName = None
 
         vals_generator = controller.joystick_source()
+        
+        scene_item_index = 0
         async for vals in vals_generator:
             # TODO: Add/Subtract from original position
             # Numpy, batch requests
+            if vals[2]:
+                scene_item_index += 1
+                if scene_item_index >= len(current_scene_items):
+                    scene_item_index = 0                    
+            if sourceName is None or sourceName != current_scene_items[scene_item_index]['name']:
+                currentScene = current_scene_items[scene_item_index]
+                sourceName = currentScene['name']
+                print(f"Switched to {sourceName}, {currentScene}")
+
+            origin_x, origin_y = currentScene['x'], currentScene['y'] 
             
             await self.move_scene_item(sourceName, vals[0], vals[1])
 
-        #TODO: stuff with the switch to cycle through sources
         return
 
     async def set_browser_src(self, sourceName, newurl):
@@ -272,22 +303,47 @@ class Bot(commands.Bot):
     #      ✓ or create my own decorator
     # TODO Create my own decorator in the User class which checks if the 
     #       command string is a username and then sets, may call Twitchio.command directly afterwards
-    def _is_command_username(function):
-        @wraps(function)
 
-    @commands.command(name="set")
-    async def user_cmd(self, ctx):
+    def _is_command_username(message):  
+
+        message_args = message.content.split()
+
+        if len(msg_split := message_args[0].split('.')) > 1:
+            username = msg_split[0]
+            attr = msg_split[1]
+            arg = message_args[1]
+        else:
+            username = message_args[0].split('.')[0]
+
+        if username == ctx.message.author.display_name:
+            return user_setter
+            # Get user info
+            # Someone who is not the user themselves wants to see their info
+        else:
+            return ctx.send("Invalid call for the moment")
+
+    async def user_setter(self, message):
         # TODO: check if user is in db, load existing user_obj if so,
         # else create user obj and set attr
-        content = ctx.message.content.split()
+        content = message.content.split()
+        attr, arg = content[0], " ".join([f"{arg}" for arg in content[1:]]) 
+        username = message.author.display_name
+        user = User(username)
+        user.attr = arg       
 
-        user = ctx.message.author # User Obj
-        username = ctx.message.author.display_name
-        attr = content[1] 
-        attr_arg = content[2]
+        ctx = get_context(message)
+        return ctx.send("Saved your info! SeemsGood")
 
-        #!set name Dani
-        #> ok
+    async def user_getter(self, message):
+        content = message.content.split()
+        username = message.author.display_name
+        # Some code to check for info in db
+        return
+        
+        
+        #!girlwithbox
+        # <Initializes all of the stuff if this is their first call to that user command>
+        # < or returns some basic info if there's already some values in there > 
         #!girlwithbox.name
         #> "Dani"
         return 
@@ -388,15 +444,17 @@ class Bot(commands.Bot):
         await ctx.send("https://foxdot.org/docs/")
         return
 
-    # Show a link on stream
+    # show a link on stream
     @commands.command(name="link")
     async def display_random_media(self, ctx):
         link = ctx.message.content.split()[1]
-        try:
-            response = urllib.request.urlopen(link)
-        except (urllib.error.HTTPError, urllib.error.URLError, ValueError):
-            await ctx.send("Not a valid url; try again hackers")
-            return
+        whitelist = ['youtube','twitter', 'tiktok', 'twitch']
+        if any([url in link for url in whitelist]):
+            try:
+                response = urllib.request.urlopen(link)
+            except (urllib.error.HTTPError, urllib.error.URLError, ValueError):
+                await ctx.send("Not a valid url; try again hackers")
+                return
         # TODO:
         # gard1ok: You can check for redirects by requesting to the url first (seperately, with urllib or something) 
         # 
