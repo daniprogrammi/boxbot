@@ -60,26 +60,6 @@ OBS_RANDOM_MEDIA_ROOT = (
 
 
 
-#COMMAND_LIST = {
-#        "box": box_cmd,
-#        "donate": donate_cmd,
-#        "hug": hug_cmd,
-#        "addtobox": add_to_box_cmd,
-#        "addtoarchive": archive_quote_cmd,
-#        "toggleDB": toggle_DyBrowse_cmd,
-#        "refresh_cam": cam_refresh_cmd,
-#        "display": display_random_media,
-#        }
-#
-#MOD_ONLY_CMDS = {
-#        "addtobox": add_to_box_cmd,
-#        "addtoarchive": archive_quote_cmd,
-#        "toggleDB": toggle_DyBrowse_cmd,
-#        }
-#
-#ME_ONLY_CMDS = {"refresh_cam": cam_refresh_cmd, "display": display_random_media}
-
-
 def missing_env_var(var_name):
     raise ValueError(
             (
@@ -138,21 +118,24 @@ class Bot(commands.Bot):
     async def event_message(self, message):
         print(f"#{message.author.name}: {message.content}")
         # check if it's a message that is a username
-        await self.handle_commands(message)
-    
-    @bot.event
-    async def on_command_error(self, ctx, error):
-        if isinstance(error, errors.CommandNotFound):
-            username = message.content.split()[0].lstrip("!")
-            if username == message.author.display_name and len(message.content.split()) > 1:
-                await self.user_setter(self, message) 
-            elif username == message.author.display_name and len(message.content.split()) == 1: 
+
+        username = message.content.split()[0].lstrip("!").lower()
+        username = username.split('.')[0]
+        # anyone requesting a specific attr
+        # anyone requesting basic info
+        # the user themselves setting their info !girlwithbox.location NYC
+        if Users('girlwithbox').check_db_for_user(username) or username == message.author.name.lower():
+            if username == message.author.name.lower() and len(message.content.split()) > 1:
+                # The user is themself and they want to set some info
+                await self.user_setter(message)
+            elif '.' in message.content:
+                # requesting an attr
+                await self.get_attr(message)
+            if len(message.content.split()) == 1 and len(message.content.split('.')) == 1: 
                 # TODO: getter
-                print("Gonna do something with this later I promise omg pls")
-                pass
-            # Someone who is not the user themselves wants to see their info
-            else:
-                print("Invalid call for the moment")
+                await self.user_getter_all(message)
+    
+        await self.handle_commands(message)
         return
 
     # TODO: Event Listeners
@@ -325,19 +308,34 @@ class Bot(commands.Bot):
     async def user_setter(self, message):
         # TODO: check if user is in db, load existing user_obj if so,
         # else create user obj and set attr
-        content = message.content.split()
-        attr, arg = content[0], " ".join([f"{arg}" for arg in content[1:]]) 
-        username = message.author.display_name
-        user = User(username)
-        user.attr = arg       
+        # !girlwithbox.attrname arg
+        content = message.content.split('.')
+        if len(content) > 2:
+            arg = " ".join(content[2:])
+            attr = content[1]
+        elif len(content) == 2:
+            attr, arg = content[1].split()
+        else:
+            return ctx.send("Sorry, we're not doing that right now")
 
-        ctx = get_context(message)
-        return ctx.send("Saved your info! SeemsGood")
-
-    async def user_getter(self, message):
-        content = message.content.split()
         username = message.author.display_name
-        # Some code to check for info in db
+        user = Users(username)
+        user.set(attr, arg)
+
+        await message.channel.send("Saved your info! SeemsGood")
+        return
+
+    async def get_attr(self, message):
+        username, attr = message.content.split('.')
+        user = Users(username)
+        await message.channel.send(f"{attr}: {user.attributes[attr]}")
+        return
+
+    async def user_getter_all(self, message):
+        username = message.content.strip('!')
+        attr = Users(username).attributes
+        await message.channel.send(f"""For user {username}, pronouns: {attr['pronouns']}, 
+                location: {attr['location']}, club penguin: {attr['club_penguin']}""")
         return
         
         
@@ -346,11 +344,34 @@ class Bot(commands.Bot):
         # < or returns some basic info if there's already some values in there > 
         #!girlwithbox.name
         #> "Dani"
+    @commands.command(name="welcome")
+    async def welcome(self, ctx):
+        await ctx.send("Welcome in raiders peepoHey. I'm the girl! This channel has been super programming focused recently"
+                "but sometimes I play games here too! The vibe is chaotic casual, "
+                "drinks are in the back and we hope you enjoy your stay peepoHey")
+        return
+    
+    @commands.command(name="sub")
+    async def sub(self, ctx):
+        await ctx.send("I appreciate everyone who subs, but it's definitely better spent on donations.")
+        await ctx.send("!aapi")
+        return
+
+    @commands.command(name="aapi")
+    async def aapi(self, ctx):
+        await ctx.send("Here are some links to resources, info and places to donate"
+                " to help stop anti-Asian violence https://anti-asianviolenceresources.carrd.co/")
+        return
+
+    @commands.command(name="blm")
+    async def blm(self, ctx):
+        await ctx.send("Here are some links to resources, info and donation links to support"
+                " Black Lives Matter https://blacklivesmatters.carrd.co/")
         return 
 
     @commands.command(name="project")
     async def project(self, ctx):
-        await ctx.send("I'm working on an Arduino controller for OBS! Breaking things and whatnot")
+        await ctx.send("I'm working on a !<username> command, and maybe some other stuff after that. Or I'll just give up and watch YT vids")
         return
 
     @commands.command(name="discord")
