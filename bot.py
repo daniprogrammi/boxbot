@@ -1,25 +1,34 @@
 import socket
 import os, sys, re
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath('.'))))
+import subprocess
+import pathlib
+from pathlib import Path
+from virtual_controllers.vserver import VServer as vs
+from virtual_controllers import vclient
+import twitchio
 from twitchio.ext import commands
 from ansimarkup import ansiprint as print
 import urllib
 import asyncio
+from virtual_controllers import vkeyboard as vk
 import simpleobsws
 import random
 import glob
 import json
-from controller_to_obs import TwitchController 
+import time
+from controller_to_obs import TwitchController
 import functools
 from chatters import Users
 
-# TODO: 
+# TODO:
 #   user profiles --- info given by viewers that can be queried by everyone
 #   each user should be able to set their attributes and set the privacy of the attr
 #   e.g. !stupac62.pronouns ; return "WAP"
 #        !KingTitan_Atlas.followage ;
 #        nickname/timezone/city/blah
 #   user specific commands
-#####   refactoring never ends 
+#####   refactoring never ends
 #####   Sound alerts
 #####   random browser source; specify filters for known/expected links
 #       ---> like a certain standard for cropping clips from twitch or youtube etc
@@ -81,6 +90,7 @@ if "CHANNEL" not in os.environ:
 TOKEN = os.environ["TWITCH_OAUTH_TOKEN"]
 BOT_NAME = os.environ["BOT_NAME"]
 CHANNEL = os.environ["CHANNEL"]
+GAMEPORT = os.environ["GAMEPORT"]
 ENCODING = "utf-8"
 
 ##
@@ -94,9 +104,12 @@ class Bot(commands.Bot):
                 prefix="!",
                 initial_channels=[CHANNEL],
                 )
-        
+        self.bot_uptime = time.time()
         self.requests = {'count': 0}
 
+        self.fight_client = None
+        self.player1 = None
+        self.player2 = None
 
     async def initialize_obsws(self, ctx):
         print(f"initializing obs with loop: {self.loop}")
@@ -131,20 +144,27 @@ class Bot(commands.Bot):
             elif '.' in message.content:
                 # requesting an attr
                 await self.get_attr(message)
-            if len(message.content.split()) == 1 and len(message.content.split('.')) == 1: 
+            if len(message.content.split()) == 1 and len(message.content.split('.')) == 1:
                 # TODO: getter
                 await self.user_getter_all(message)
-    
+
         await self.handle_commands(message)
         return
 
+    # TODO: timers
+
     # TODO: Event Listeners
+    async def on_streaming(self, data):
+        stream_start_time = time.time()
+        return
+
     async def on_event(self, data):
         print(f"New event: Type: {type(data)} | Raw Data: {data}")
         return
 
     async def on_switchscenes(self, data):
         print(f'Scene switched to "{data}, {data}"')  # ['scene-name'] ['sources']
+
 
     def is_owner(ctx):
         return ctx.author.display_name == "girlwithbox"
@@ -155,7 +175,7 @@ class Bot(commands.Bot):
     def is_sub(ctx):
         return ctx.author.is_subscriber
 
-    # TODO: 
+    # TODO:
     def is_vip(ctx):
         return
 
@@ -206,18 +226,18 @@ class Bot(commands.Bot):
         request = "SetSceneItemProperties"
         data = {"item": sourceName, "position": {"x":new_x, "y":new_y}}
         result = await self.make_request(request, data)
-        return        
+        return
 
     async def twitch_controller(self):
         controller = TwitchController()
         # TODO: obs-websocket protocol ahead of simpleobsws
         current_scene_items = await self.get_current_scene_items()
-        current_scene_items = [{'name':item['name'], 'x':item['x'], 'y':item['y']} for item in current_scene_items if item['render'] is True] 
+        current_scene_items = [{'name':item['name'], 'x':item['x'], 'y':item['y']} for item in current_scene_items if item['render'] is True]
         # move index when joystick is hit
         sourceName = None
 
         vals_generator = controller.joystick_source()
-        
+
         scene_item_index = 0
         async for vals in vals_generator:
             # TODO: Add/Subtract from original position
@@ -225,14 +245,14 @@ class Bot(commands.Bot):
             if vals[2]:
                 scene_item_index += 1
                 if scene_item_index >= len(current_scene_items):
-                    scene_item_index = 0                    
+                    scene_item_index = 0
             if sourceName is None or sourceName != current_scene_items[scene_item_index]['name']:
                 currentScene = current_scene_items[scene_item_index]
                 sourceName = currentScene['name']
                 print(f"Switched to {sourceName}, {currentScene}")
 
-            origin_x, origin_y = currentScene['x'], currentScene['y'] 
-            
+            origin_x, origin_y = currentScene['x'], currentScene['y']
+
             await self.move_scene_item(sourceName, vals[0], vals[1])
 
         return
@@ -242,13 +262,17 @@ class Bot(commands.Bot):
         data = {"sourceName": sourceName, "sourceSettings": {"url": newurl}}
         result = await self.make_request(request, data)
         return
- 
+
 
     ############################################################################
     #                         Twitch Commands                                  #
     ############################################################################
-   
-    
+
+    @commands.command(name='bot_uptime')
+    async def bot_uptime(self, ctx):
+        await ctx.send(f"{round((time.time() - self.bot_uptime)/60, 2)} minutes since bot last broke")
+        return
+
     @commands.check(is_mod)
     @commands.command(name='set_visible')
     async def set_visible(self, ctx=None, sceneItem=None, boolean=True):
@@ -272,9 +296,130 @@ class Bot(commands.Bot):
         result = await self.make_request("GetSceneItemProperties", data)
 
         print(f"type:{type(result)}, result:{(result)}")
-        ctx.send(f"x:{result['position']['x']}, y:{result['position']['y']}")
+        await ctx.send(f"x:{result['position']['x']}, y:{result['position']['y']}")
         return
 
+    @commands.check(is_mod)
+    @commands.command(name="vserver")
+    async def vserver_start(self, ctx):
+        server_env = vs.getsubprocessenv()
+
+        start_server_file = os.path.join(os.path.abspath('.'), 'start_server.ps1')
+        if not os.path.isfile(start_server_file):
+           with open(start_server_file, 'w') as f:
+               f.write(f"$env:GAMEPORT='{GAMEPORT}'\n")
+               f.write("cd C:\\Users\\Dani\\Documents\\Twitch\\Coding\\virtual_controllers\\\n")
+               f.write(f"python vserver.py {GAMEPORT}")
+
+        #TODO: use pathlib to build start_server_script path
+        #start_server_file = Path.cwd().joinpath(Path('start_server.ps1'))
+        #start_server_cmd = ["powershell.exe", "-File",
+        #        r"C:\Users\Dani\Documents\Twitch\Coding\twitch_chatbot\twitch_chatbot\start_server.ps1"]
+        #start_server_cmd_str = f"{start_server_cmd[0]} {start_server_cmd[1]} {start_server_cmd[2]}"
+        #proc = subprocess.Popen(start_server_cmd)
+        #proc = await asyncio.create_subprocess_shell(start_server_cmd_str, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+        #stdout, stderr = await proc.communicate()
+        #if proc.returncode == 0:
+        #    await ctx.send("Fight Server started! SeemsGood")
+        #else:
+#            print(f'Exited with {proc.returncode}')
+#            if stdout:
+#                print(f'[stdout]: \n{stdout.decode()}')
+#            if stderr:
+#                print(f'[stderr]:\n{stderr.decode()}')
+#
+
+        self.fight_client = vclient.VClient(os.environ['HOSTNAME'], int(GAMEPORT))
+        # TODO: Try passing the loop also
+        loop = asyncio.get_running_loop()
+        self.fight_client.start_client(loop)
+        await ctx.send("Fight Client (MAYBE) started! SeemsGood")
+
+        return
+
+    @commands.check(is_mod)
+    @commands.command(name="vclose")
+    async def vclose(self):
+       # Close client server
+       self.fight_client.close()
+       return
+
+    @commands.check(is_mod)
+    @commands.command(name="player1")
+    async def assign_player1(self, ctx, keyb=None):
+        if not self.player1:
+            content = ctx.message.content.split()
+            playername = content[1].lower()
+
+            request = { 'request': 'create_player', 'player': playername }
+            self.player1 = playername
+            self.fight_client.send(request)
+            await ctx.send(f"Set Player 1 as {self.player1}")
+        else:
+            await ctx.send("Player 1 already assigned!!")
+
+        return
+
+    @commands.check(is_mod)
+    @commands.command(name="player2")
+    async def assign_player2(self, ctx):
+        if not self.player2:
+            content = ctx.message.content.split()
+            playername = content[1].lower()
+
+            request = { 'request': 'create_player', 'player': playername }
+            self.player2 = playername
+            self.fight_client.send(request)
+            await ctx.send(f"Set Player 2 as {self.player1}")
+        else:
+            await ctx.send("Player 2 already assigned!!")
+        return
+    
+    @commands.check(is_mod)
+    @commands.command(name="chplayer")
+    async def chplayer(self, ctx):
+        # !chplayer player1 new_name
+        old_player, new_player = ctx.message.content.split()[1:]
+        if self.player1 or self.player2:
+            request = { 'request': 'overwrite_player', 'old_player': old_player.lower(), 'new_player': new_player.lower() }
+            self.fight_client.send(request)
+            await ctx.send(f"Changed {old_player} to {new_player}")
+        else:
+            await ctx.send("No players set")
+        return
+
+
+    def is_player(self, ctx):
+        name = ctx.author.display_name.lower()
+        return name == self.player1 or name == self.player2
+
+    # TODO: make character select
+
+    #@commands.check(is_player)
+    @commands.command(name='fight')
+    async def fight(self, ctx):
+        name = ctx.author.display_name.lower()
+        if name == self.player1 or name == self.player2:
+            pass
+        else:
+            ctx.send("Not your turn bru")
+            return
+        content = ctx.message.content.split()
+
+        request = {'request': 'play'}
+        if ctx.author.display_name.lower() == self.player1:
+            player = self.player1
+            request['player'] = 'player1'
+        elif ctx.author.display_name.lower() == self.player2:
+            player = self.player2
+            request['player'] = 'player2'
+        else:
+            ctx.send("Not your turn!!")
+
+        request['moveset'] = content[1][:100] if len(content[1]) > 100 else content[1]
+        print("Moveset:", request['moveset'])
+        self.fight_client.send(request)
+        return
 
     # If args passed in then this is a "setter" command
     #   if setter it must be set by the user themselves (or a mod)
@@ -284,10 +429,10 @@ class Bot(commands.Bot):
     # TODO:x try name is twitchio.dataclass.User
     #      x read into module and figure out a workaround
     #      ✓ or create my own decorator
-    # TODO Create my own decorator in the User class which checks if the 
+    # TODO Create my own decorator in the User class which checks if the
     #       command string is a username and then sets, may call Twitchio.command directly afterwards
 
-    def _is_command_username(message):  
+    def _is_command_username(message):
 
         message_args = message.content.split()
 
@@ -334,14 +479,14 @@ class Bot(commands.Bot):
     async def user_getter_all(self, message):
         username = message.content.strip('!')
         attr = Users(username).attributes
-        await message.channel.send(f"""For user {username}, pronouns: {attr['pronouns']}, 
+        await message.channel.send(f"""For user {username}, pronouns: {attr['pronouns']},
                 location: {attr['location']}, club penguin: {attr['club_penguin']}""")
         return
-        
-        
+
+
         #!girlwithbox
         # <Initializes all of the stuff if this is their first call to that user command>
-        # < or returns some basic info if there's already some values in there > 
+        # < or returns some basic info if there's already some values in there >
         #!girlwithbox.name
         #> "Dani"
     @commands.command(name="welcome")
@@ -350,7 +495,7 @@ class Bot(commands.Bot):
                 "but sometimes I play games here too! The vibe is chaotic casual, "
                 "drinks are in the back and we hope you enjoy your stay peepoHey")
         return
-    
+
     @commands.command(name="sub")
     async def sub(self, ctx):
         await ctx.send("I appreciate everyone who subs, but it's definitely better spent on donations.")
@@ -367,17 +512,22 @@ class Bot(commands.Bot):
     async def blm(self, ctx):
         await ctx.send("Here are some links to resources, info and donation links to support"
                 " Black Lives Matter https://blacklivesmatters.carrd.co/")
-        return 
+        return
+
+    @commands.command(name="face")
+    async def face(self, ctx):
+        await ctx.send("Here's what happened... https://clips.twitch.tv/BlithePatientHedgehogSoonerLater-H7myyAeGy7iHig2w")
+        return
 
     @commands.command(name="project")
     async def project(self, ctx):
-        await ctx.send("I'm working on a !<username> command, and maybe some other stuff after that. Or I'll just give up and watch YT vids")
+        await ctx.send("Can we get chat to play Mortal Kombat? Creating a client to send chat input to steam ")
         return
 
     @commands.command(name="discord")
     async def discord(self, ctx):
         await ctx.send("Join my discord! [Put pressure on me to maintain it] https://discord.gg/4RXASvcG6k")
-        return 
+        return
 
     # Events don't need decorators when subclassed
     @commands.command(name="role")
@@ -440,9 +590,9 @@ class Bot(commands.Bot):
         return None
 
     #@commands.check(self.is_mod)
-    @commands.command(name="toggle_source")
-    async def toggle_source(self, srcname):
-        await self.toggle_src(srcname.message.content.split()[1])
+    @commands.command(name="_source")
+    async def _source(self, srcname):
+        await self._src(srcname.message.content.split()[1])
         # TODO: Everything
         return None
 
@@ -460,6 +610,7 @@ class Bot(commands.Bot):
             return None
         else:
             return None
+
     @commands.command(name="foxdoc")
     async def send_foxdot_docs(self, ctx):
         await ctx.send("https://foxdot.org/docs/")
@@ -477,8 +628,8 @@ class Bot(commands.Bot):
                 await ctx.send("Not a valid url; try again hackers")
                 return
         # TODO:
-        # gard1ok: You can check for redirects by requesting to the url first (seperately, with urllib or something) 
-        # 
+        # gard1ok: You can check for redirects by requesting to the url first (seperately, with urllib or something)
+        #
         status_code = response.getcode()
         if status_code != 200:
             await ctx.send("Not a valid url; try again hackers")
@@ -513,10 +664,17 @@ class Bot(commands.Bot):
         print("Returned")
         return f"You want to have a message? {msg}"
 
+    @commands.command(name='daunte')
+    async def daunte(self, ctx):
+        await ctx.send(f"TW: Police Violence -- https://www.theguardian.com/us-news/2021/apr/12/minnesota-police-shooting-daunte-wright")
+        await ctx.send(f"If you can, consider donating to support Daunte's girlfriend and their son: https://www.instagram.com/p/CNkyQbJHoWM/")
+        return
+
+
     @commands.command(name='stocks') # Check the stock mrkt
     async def stocks(self, ctx):
         # TODO: Return real-time fluctuations in the mrkt
-        return 
+        return
 
     @commands.command(name='buy') #BUY the stock mrkt
     async def buy(self, ctx):
