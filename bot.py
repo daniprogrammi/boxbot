@@ -529,6 +529,16 @@ class Bot(commands.Bot):
         await ctx.send("Join my discord! [Put pressure on me to maintain it] https://discord.gg/4RXASvcG6k")
         return
 
+    @commands.command(name="twitter")
+    async def twitter(self, ctx):
+        await ctx.send("DxCat For more box-related shenanigans follow me on twitter www.twitter.com/girlwithbox DxCat")
+        return
+
+    @commands.command(name="github")
+    async def github(self, ctx):
+        await ctx.send("Find my code on GitHub! https://github.com/Danicodes")
+        return
+
     # Events don't need decorators when subclassed
     @commands.command(name="role")
     async def role(self, ctx):
@@ -595,21 +605,6 @@ class Bot(commands.Bot):
         await self._src(srcname.message.content.split()[1])
         # TODO: Everything
         return None
-
-    @commands.command(name="twitter")
-    async def twitter_cmd(self, username, link=None):
-        """
-        If no tweet provided, then send the url to my twitter page
-        otherwise display sent tweet
-        """
-        if not link:
-            twitter_str = """DxCat For more box-related shenanigans follow me on twitter www.twitter.com/girlwithbox DxCat"""
-            return twitter_str
-        elif link and "twitter" in link and "/status/" in link:
-            set_browser_src(link)
-            return None
-        else:
-            return None
 
     @commands.command(name="foxdoc")
     async def send_foxdot_docs(self, ctx):
