@@ -1,0 +1,5 @@
+urllib3
+twitchio
+python-dotenv
+requests
+simpleobsws

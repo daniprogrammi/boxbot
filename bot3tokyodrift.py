@@ -21,19 +21,19 @@ import admin
 
 ENCODING = "utf-8"
 
+
 class Bot(commands.Bot):
     # Bot's internal methods
     def __init__(self):
-        self.config = dotenv_values() # load .env file
+        self.config = dotenv_values()  # load .env file
         super().__init__(
-                token=self.config["TWITCH_OAUTH_TOKEN"],
-                client_id="adbcgdfja",
-                nick=self.config['BOT_NAME'],
-                prefix="!", 
-                initial_channels=[self.config["CHANNEL"]],
-                )
+            token=self.config["TWITCH_OAUTH_TOKEN"],
+            client_id="adbcgdfja",
+            nick=self.config['BOT_NAME'],
+            prefix="!",
+            initial_channels=[self.config["CHANNEL"]],
+        )
 
-        
         self.bot_uptime = time.time()
         self.requests = {'count': 0}
 
@@ -43,9 +43,9 @@ class Bot(commands.Bot):
         self.player2 = None
 
         self.link_buffer = os.path.join(os.curdir, "buffers", "links.txt")
-        self.envvars = {'AUTOLOAD_MODULES': ['admin'], 'BOT_ADMIN': 'girlwithbox', 'DEBUG': 'critical'} 
+        self.envvars = {'AUTOLOAD_MODULES': ['admin'], 'BOT_ADMIN': 'girlwithbox', 'DEBUG': 'critical'}
 
-    
+
 if __name__ == "__main__":
     bot = Bot()
     bot.load_module("admin")
