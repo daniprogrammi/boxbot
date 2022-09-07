@@ -20,7 +20,7 @@ class VlcCog(commands.Cog):
         self.playing_now = None
         self.bot.loop.create_task(self.db_init())
     
-    @commands.command(name="vlc_link")
+    @commands.command(name="vlc_link", aliases=['link', 'url'])
     async def display_media_vlc(self, ctx: commands.Context, link):
         # TODO QUERY DB TO SEE IF URL ALREADY ADDED
         
