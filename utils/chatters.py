@@ -139,6 +139,7 @@ class Users:
 
         return {'username': user, **attributes}, user, attributes
 
+
     def set(self, attr, arg):
         # The json object that holds self.attributes
         # will it change if we change those attr?
@@ -151,6 +152,7 @@ class Users:
         # TODO: implement checks for certain attributes?
         self.write_user()
         return
+
 
     def write_user(self):
         if self.table.contains(self.query.username ==  self.user):

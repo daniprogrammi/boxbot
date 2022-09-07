@@ -34,7 +34,7 @@ class UsersCog(commands.Cog):
 
     @commands.command(name="new")
     async def make_new_user_entry(self, ctx):
-        name = ctx.message.author
+        name = ctx.message.author.display_name.lower()
         try:
             await self.db.add_user_to_db(name)
         except:
