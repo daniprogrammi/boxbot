@@ -8,21 +8,21 @@ from utils.chatters import UserDB
 import asyncio
 import sqlite3
 
-from pymongo import MongoClient 
+from pymongo import MongoClient
 
 client = MongoClient("mongodb://localhost:27017")
 db = client.get_database("streamDB")
 collection = db.get_collection("userInfo")
-users = collection.find({}, {'_id':0, 'username': 1})
-userlist = []
+users = collection.find({}, {'_id': 0, 'username': 1})
+user_list = []
 for doc in users:
-    userlist.append(doc["username"])
+    user_list.append(doc["username"])
 
 
 # db = UserDB()
 # loop = asyncio.get_running_loop()
 # userlist_task = loop.create_task(db.getAllUsers())
-#userlist = await asyncio.wait(db.getAllUsers())# userlist_task.result()
+# userlist = await asyncio.wait(db.getAllUsers())# userlist_task.result()
 
 class UsersCog(commands.Cog):
     def __init__(self, bot: commands.Bot):
@@ -41,9 +41,9 @@ class UsersCog(commands.Cog):
             await ctx.send("User already in db!")
         return
 
-    @commands.command(aliases=userlist)
+    @commands.command(aliases=user_list)
     async def dyncommand(self, ctx: commands.Context, attribute=None, value=None):
-        username = ctx.message.content.split()[0].strip('!') # ctx.command.name won't work here bc we're using an alias
+        username = ctx.message.content.split()[0].strip('!')  # ctx.command.name won't work here bc we're using an alias
         print(username)
         if value and (username.lower() != ctx.message.author.display_name.lower()):
             await ctx.send("You can't change another person's info")
@@ -58,14 +58,14 @@ class UsersCog(commands.Cog):
 
                 await ctx.send(f"{username}.{attribute} = {result}")
                 return
-            
+
             if attribute and value:
                 try:
                     await self.db.addtouser(username, attribute, value)
                 except:
                     await ctx.send("Oooops....")
                     return
-                
+
                 await ctx.send("Set that thing!")
                 return
 
@@ -90,6 +90,6 @@ class UsersCog(commands.Cog):
 def prepare(bot: commands.Bot):
     bot.add_cog(UsersCog(bot))
 
+
 def breakdown(bot: commands.Bot):
     bot.remove_cog(UsersCog)
-
