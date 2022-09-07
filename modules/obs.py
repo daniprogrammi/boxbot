@@ -208,10 +208,10 @@ class ObsCog(commands.Cog):
 
 
     @commands.command(name="getInputSettings")
-    async def getInputSettings(self, ctx:commands.Context):
+    async def getInputSettings(self, ctx:commands.Context, inputName):
         command = ctx.message.content.split()
 
-        inputName = command[1]
+        _inputName = command[1]
         requestName = "GetInputSettings"
 
         data = {"inputName": inputName}
@@ -296,11 +296,15 @@ class ObsCog(commands.Cog):
         return
 
 
-
+def main():
+    pass
 
 def prepare(bot: commands.Bot): 
     bot.add_cog(ObsCog(bot))
 
 def breakdown(bot: commands.Bot): # Unload module
     bot.remove_cog("ObsCog")   
+
+if __name__ == "__main__":
+    main()
     

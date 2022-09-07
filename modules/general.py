@@ -1,6 +1,8 @@
 import os, sys, re
 from twitchio.ext import commands
 import urllib3
+import random
+from time import sleep
  
 class GenCog(commands.Cog):
     def __init__(self, bot):
@@ -8,33 +10,72 @@ class GenCog(commands.Cog):
         self.project_str = None
         self.obs = bot.get_cog("ObsCog")
     
-    @commands.command(name="link")
-    async def link(self, ctx:commands.Context, requested_url):
-        link = ctx.message.content.split()[1]
-        whitelist = ['youtube','twitter', 'tiktok', 'twitch']
-        if any([url in link for url in whitelist]):
-            try:
-                http = urllib3.PoolManager()
-                response = http.request('GET', link)
-            except:
-                await ctx.send("Not a valid url; try again hackers")
-                return
-        else: 
-            await ctx.send("Can't do that")
-            return
 
-        status_code = response.status
-        if status_code != 200:
-            await ctx.send("Not a valid url; try again hackers")
-            return
+    @commands.command(name="todo")
+    async def todo(self, ctx:commands.Command):
+        #TODO: Make a todo command
+        pass
 
-        link_src = "link"
-        await self.obs._setSourceSettings(link_src, {"url": requested_url})
-        await self.obs._toggleSource(link_src, True)
+    @commands.command(name="box")
+    async def box(self, ctx) -> None:
+        basepath = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(os.curdir))))
+        basepath = os.path.join(basepath, "OBS_Scene_Switch_Assets")
+
+        choice = random.choice(['audio', 'images', 'videos', 'gifs', 'text'])
+        path = os.path.join(basepath, choice)
+        value = os.path.join(path, random.choice(os.listdir(path))) if choice != 'text' else None
+        if value: 
+            value = value.replace('/mnt/c/', 'C:\\')
+            value = value.replace('/', '\\')
+
+        if choice == 'audio':
+            print("Loading... " + choice)
+            #do something with the source called audio
+            await self.obs._setSourceSettings("audio", {"local_file": value})
+            await self.obs._toggleSource("audio", True)
+            sleep()
+            pass
+        elif choice == 'images':
+            print("Loading... " + choice)
+            # do something with the source called 'image'
+            await self.obs._setSourceSettings("image", {"file": value})
+            await self.obs._toggleSource("image", True)
+            pass
+        elif choice == 'videos' or choice == 'gifs':
+            # use video source
+            print("Loading... " + choice)
+            await self.obs._setSourceSettings("videos", {"playlist": [{"value": value, 'hidden': False, 'selected': False}]})
+            await self.obs._toggleSource("videos", True)
+        elif choice == 'text':
+            print("Loading... " + choice)
+            text = random.choice(["Box", 
+                "struggle!",
+                " an even smaller box",
+                "cookies",
+                "Actually, it's empty",
+                "a head!",
+                "chocolates",
+                "Chonky Ryan Gosling",
+                ":)",
+                "*screams*",
+            ])
+
+            await ctx.send("What's in the box?")
+            await ctx.send(text)
 
         return
 
-        
+    @commands.command(name="lurk")
+    async def lurk(self, ctx: commands.Context):
+        await ctx.send(f"{ctx.message.author.display_name} retreated to the safety of the box 👁️ 👁️ (thank you for the lurk!)")
+        return
+    
+    @commands.command(name="so", aliases=["shoutout"])
+    async def shoutout(self, ctx: commands.Context, username):
+        category = None # self.bot.get_category(user)?????
+        url = None # either append username to twitch.tv or do it a smart way
+        await ctx.send(f"CorgiDerp Shout out to {username} CorgiDerp If you want to watch some extreme {{game}} gameplay, follow {username} at {{url}} I hear they're amazing!)")
+        return
 
 
     @commands.command(name="welcome")
