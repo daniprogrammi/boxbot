@@ -5,18 +5,19 @@ from twitchio import Message
 import asyncio
 import simpleobsws
 
+
 class ObsCog(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
-        parameters = simpleobsws.IdentificationParameters(ignoreNonFatalRequestChecks = False)
+        parameters = simpleobsws.IdentificationParameters(ignoreNonFatalRequestChecks=False)
         self.obs_ws = simpleobsws.WebSocketClient(
-                url=f"ws://{self.bot.config['HOSTNAME']}:{self.bot.config['PORT']}",
-                password=self.bot.config["PASSWORD"],
-                identification_parameters=parameters
-                )
+            url=f"ws://{self.bot.config['HOSTNAME']}:{self.bot.config['PORT']}",
+            password=self.bot.config["PASSWORD"],
+            identification_parameters=parameters
+        )
         print(f"initializing obs with loop: {self.obs_ws.loop}")
         self.bot.loop.create_task(self.obs_ws.connect())
-        #self.bot.loop.create_task(self.obs_ws.wait_until_identified()) #I GUESS??
+        # self.bot.loop.create_task(self.obs_ws.wait_until_identified()) #I GUESS??
         print("Obs cog :o")
 
     # TODO: READ
@@ -26,20 +27,20 @@ class ObsCog(commands.Cog):
 
     @commands.command(name='obsinit')
     async def initialize_obsws(self):
-        parameters = simpleobsws.IdentificationParameters(ignoreNonFatalRequestChecks = False)
+        parameters = simpleobsws.IdentificationParameters(ignoreNonFatalRequestChecks=False)
         self.obs_ws = simpleobsws.WebSocketClient(
-                url=f"ws://{self.bot.config['HOSTNAME']}:{self.bot.config['PORT']}",
-                password=self.bot.config["PASSWORD"],
-                identification_parameters=parameters
-                )
+            url=f"ws://{self.bot.config['HOSTNAME']}:{self.bot.config['PORT']}",
+            password=self.bot.config["PASSWORD"],
+            identification_parameters=parameters
+        )
         print(f"initializing obs with loop: {self.obs_ws.loop}")
-        self.loop = self.obs_ws.loop # Yeaaah...?
+        self.loop = self.obs_ws.loop  # Yeaaah...?
         await self.obs_ws.connect()
-        await self.obs_ws.wait_until_identified() #I GUESS??
+        await self.obs_ws.wait_until_identified()  # I GUESS??
         return
 
     def cog_unload(self):
-        print("Breaking down cog, disconnecting...") #Not called on remove_cog/unload
+        print("Breaking down cog, disconnecting...")  # Not called on remove_cog/unload
         if self.obs_ws:
             self.obs_ws_disconnect_task = self.bot.loop.create_task(self.obs_ws.disconnect())
         return
@@ -59,13 +60,13 @@ class ObsCog(commands.Cog):
         request = simpleobsws.Request(request, data)
         if not self.obs_ws:
             print("Obs websocket not initialized, cannot make request")
-            return #sys.exit(0)
+            return  # sys.exit(0)
         result = await self.obs_ws.call(request)
-            # Make a request with the given data
+        # Make a request with the given data
         if not result.ok():
             print(f"Error [{result.requestType}]: {result.requestStatus.comment}")
             return None
-        
+
         if verbose:
             print("Request returned: ", result)
         return result.responseData
@@ -75,7 +76,7 @@ class ObsCog(commands.Cog):
         if not sceneName:
             sceneName = await self._getCurrentScene()
         sceneItemId = await self._getSceneItemId(sceneItemName, sceneName=sceneName)
-        data = {"sceneName": sceneName, "sceneItemId": int(sceneItemId), "sceneItemEnabled": enabled }
+        data = {"sceneName": sceneName, "sceneItemId": int(sceneItemId), "sceneItemEnabled": enabled}
         await self.make_request(requestName, data)
         return
 
@@ -95,7 +96,7 @@ class ObsCog(commands.Cog):
 
         if not sceneName:
             return None
-        
+
         result = await self.make_request(requestName, data)
         if result:
             return result["sceneItemId"]
@@ -112,7 +113,7 @@ class ObsCog(commands.Cog):
 
         result = await self.make_request(requestName, data)
         return result["sceneItemEnabled"] if result else None
-   
+
     async def _toggleInputMute(self, inputName):
         requestName = "ToggleInputMute"
         data = {"inputName": inputName}
@@ -121,16 +122,15 @@ class ObsCog(commands.Cog):
 
     async def _getMediaInputStatus(self, inputName):
         requestName = "GetMediaInputStatus"
-        data = { "inputName": inputName }
+        data = {"inputName": inputName}
         res = await self.make_request(requestName, data)
         return res
 
     async def _setSourceSettings(self, inputName, inputSettings, overlay=True):
         requestName = "SetInputSettings"
-        data = { "inputName": inputName, "inputSettings": inputSettings }
+        data = {"inputName": inputName, "inputSettings": inputSettings}
         await self.make_request(requestName, data)
-        return 
-
+        return
 
     async def _getSceneItems(self):
         requestName = "GetSceneItemList"
@@ -145,9 +145,9 @@ class ObsCog(commands.Cog):
             newState = not enabled
         else:
             newState = state
-        
+
         await self._setSceneItemEnabled(sourceName, newState)
-        
+
         return
 
     # # ############################################
@@ -161,7 +161,7 @@ class ObsCog(commands.Cog):
             print(res)
         return
 
-    @commands.command(name="set_visible") # !set_visible sceneItemName true/false
+    @commands.command(name="set_visible")  # !set_visible sceneItemName true/false
     async def setSceneItemState(self, ctx: commands.Context):
         command = ctx.message.content.split()
         if len(command) > 2:
@@ -170,7 +170,7 @@ class ObsCog(commands.Cog):
         else:
             await ctx.send("Need more arguments!")
             return
-        
+
         if setItem in ["true", "t"]:
             setItem = True
         else:
@@ -206,9 +206,8 @@ class ObsCog(commands.Cog):
         print(response)
         return
 
-
     @commands.command(name="getInputSettings")
-    async def getInputSettings(self, ctx:commands.Context):
+    async def getInputSettings(self, ctx: commands.Context):
         command = ctx.message.content.split()
 
         inputName = command[1]
@@ -221,7 +220,7 @@ class ObsCog(commands.Cog):
         return
 
     @commands.command(name="setInputSettings")
-    async def setInputSettings(self, ctx:commands.Context):
+    async def setInputSettings(self, ctx: commands.Context):
         command = ctx.message.content.split()
 
         inputName = command[1]
@@ -234,7 +233,7 @@ class ObsCog(commands.Cog):
         return
 
     @commands.command(name="getOutput")
-    async def getOutputSettings(self, ctx:commands.Context, outputName):
+    async def getOutputSettings(self, ctx: commands.Context, outputName):
         requestName = "SetOutputSettings"
         data = {"outputName": outputName}
 
@@ -245,8 +244,8 @@ class ObsCog(commands.Cog):
             await ctx.send("No")
         return
 
-    @commands.command(name="setOutput") # outputName, outputSettings
-    async def setOutputSettings(self, ctx:commands.Context, outputName, outputSetting, outputSettingValue):
+    @commands.command(name="setOutput")  # outputName, outputSettings
+    async def setOutputSettings(self, ctx: commands.Context, outputName, outputSetting, outputSettingValue):
         requestName = "SetOutputSettings"
         data = {f"{outputSetting}": outputSettingValue, "outputName": outputName}
         res = await self.make_request(requestName, data)
@@ -257,7 +256,7 @@ class ObsCog(commands.Cog):
         return
 
     @commands.command(name="getMediaStatus")
-    async def getMediaInputStatus(self, ctx:commands.Context, mediaName):
+    async def getMediaInputStatus(self, ctx: commands.Context, mediaName):
         res = await self._getMediaInputStatus(mediaName)
 
         if res:
@@ -277,16 +276,15 @@ class ObsCog(commands.Cog):
             triggeraction = "OBS_WEBSOCKET_MEDIA_INPUT_ACTION_RESTART"
         else:
             return
-        
+
         requestName = "TriggerMediaInputAction"
-        data = { "inputName": source, "mediaAction": triggeraction }
+        data = {"inputName": source, "mediaAction": triggeraction}
 
         await self.make_request(requestName, data)
         return
-        
 
     @commands.command(name="media")
-    async def mediaAction(self, ctx:commands.Context, source, action):
+    async def mediaAction(self, ctx: commands.Context, source, action):
         await self.setMedia(source, action)
         return
 
@@ -296,11 +294,9 @@ class ObsCog(commands.Cog):
         return
 
 
-
-
-def prepare(bot: commands.Bot): 
+def prepare(bot: commands.Bot):
     bot.add_cog(ObsCog(bot))
 
-def breakdown(bot: commands.Bot): # Unload module
-    bot.remove_cog("ObsCog")   
-    
+
+def breakdown(bot: commands.Bot):  # Unload module
+    bot.remove_cog("ObsCog")
