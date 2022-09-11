@@ -1,5 +1,5 @@
 import os, sys, re
-import json
+import json # Note to look at orjson
 from typing import Literal
 from twitchio import AuthenticationError
 from twitchio.ext import commands
@@ -20,11 +20,19 @@ class GenCog(commands.Cog):
         basepath = os.path.join(basepath, "buffers")
 
         cache_path = os.path.join(basepath, "stream-cache.json")
-        if os.path.exists(cache_path):
-            cache = json.load(open(cache_path, 'w'))
+            
+        try:
+            cache = json.loads(open(cache_path, 'w+'))
             return cache_path, cache
-        else:
-            return cache_path, None
+        except json.JSONDecodeError as e:
+            # Cache is currently empty or invalid
+            if os.path.getsize(cache_path) == 0:
+                # Cache is empty
+                return cache_path, None
+            else:
+               raise json.JSONDecodeError(f"Invalid json syntax in cache: {e}")
+        except FileNotFoundError as e:
+            raise FileNotFoundError(f"Cache not found: {e}")
 
     @commands.command(name="todo")
     async def todo(self, ctx:commands.Command):
@@ -39,7 +47,7 @@ class GenCog(commands.Cog):
         choice = random.choice(['audio', 'images', 'videos', 'gifs', 'text'])
         path = os.path.join(basepath, choice)
         value = os.path.join(path, random.choice(os.listdir(path))) if choice != 'text' else None
-        if value: 
+        if value:
             value = value.replace('/mnt/c/', 'C:\\')
             value = value.replace('/', '\\')
         if not value:
