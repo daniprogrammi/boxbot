@@ -15,7 +15,8 @@ class GenCog(commands.Cog):
         self.obs = bot.get_cog("ObsCog")
     
     def get_cache(self):
-        basepath = os.path.dirname(os.path.abspath(os.curdir)) # parent dir twitch_chatbot
+        # TODO: fix this, line 23 fails on json.load
+        basepath = os.path.abspath(os.curdir) # parent dir twitch_chatbot
         basepath = os.path.join(basepath, "buffers")
 
         cache_path = os.path.join(basepath, "stream-cache.json")
@@ -168,7 +169,7 @@ class GenCog(commands.Cog):
         """Displays the current project"""
         
         # Check project_str then cache
-        basepath = os.path.dirname(os.path.abspath(os.curdir)) # parent dir twitch_chatbot
+        basepath = os.path.abspath(os.curdir) # parent dir twitch_chatbot
         basepath = os.path.join(basepath, "buffers")
 
         cache = os.path.join(basepath, "stream-cache.json")
