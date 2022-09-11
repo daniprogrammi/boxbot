@@ -68,7 +68,7 @@ class GenCog(commands.Cog):
             try:
                 await self.obs.set_source_settings("audio", {"local_file": value})
                 await self.obs.toggle_source("audio", True)
-                sleep(5)  # Why is this necessary??
+                sleep(5)  # Why is this necessary?? -- I don't remember ... 
             except twitchio.TwitchIOException as e:
                 print
                 await ctx.send("Uh-oh the box didn't find anything this time; try again plskthnx")
@@ -195,6 +195,7 @@ class GenCog(commands.Cog):
             "List of abortion funds by state: https://docs.google.com/document/d/1T-aDTsZXnKhMcrDmtcD35aWs00gw5piocDhaFy5LKDY/")
         await ctx.send(
             "If you are in need of resources check out https://www.reddit.com/r/auntienetwork and https://www.reddit.com/r/abortion <3")
+        return
 
     @commands.command(name="project")
     async def project(self, ctx: commands.Context):
@@ -212,6 +213,7 @@ class GenCog(commands.Cog):
                 if current_project:
                     self.project_str = current_project
         await ctx.send("project not set! set with chproject")
+        return
 
     # @commands.check(is_mod)
     @commands.command(name="chproject")
@@ -227,6 +229,7 @@ class GenCog(commands.Cog):
             cache = {'project': self.project_str}
 
         json.dump(cache, open(cache_path, 'w+'))  # Store for later
+        return
 
     @commands.command(name="discord")
     async def discord(self, ctx: commands.Context):

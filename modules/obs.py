@@ -9,6 +9,7 @@ import simpleobsws
 
 """ 
 TODO(DANI): Variable Names should be lower case not camel case
+!!!!!!! NO
 --------------------------------------------------------------
 """
 
@@ -52,7 +53,7 @@ class ObsCog(commands.Cog):
             self.obs_ws_disconnect_task = self.bot.loop.create_task(self.obs_ws.disconnect())
 
     @commands.command(name='obsversion')
-    async def getversion(self, ctx):
+    async def get_version(self, ctx):
         request = simpleobsws.Request('GetVersion')
         ret: simpleobsws.RequestResponse = await self.obs_ws.call(request)
         if ret.ok():
@@ -187,6 +188,7 @@ class ObsCog(commands.Cog):
     async def getCurrentScene(self, ctx: commands.Context):
         result = await self._getCurrentScene()
         await ctx.send(f"{result}")
+        return
 
     @commands.command(name="enabled")
     async def isItemEnabled(self, ctx: commands.Context):
@@ -194,10 +196,13 @@ class ObsCog(commands.Cog):
         print(command)
         if len(command) > 1:
             sceneItemName = command[1]
-        await ctx.send("Expected a scene item")
+        else:
+            await ctx.send("Expected a scene item")
+            return
 
         result = await self._isItemEnabled(sceneItemName)
         await ctx.send(f"{result}")
+        return
 
     @commands.command(name="inputlist")
     async def getInputList(self, ctx: commands.Context):
