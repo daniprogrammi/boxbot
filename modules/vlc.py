@@ -2,11 +2,11 @@ from gettext import find
 import re
 import aiosqlite
 from numpy import insert
-from pyrsistent import get_in
 from twitchio.ext import commands
 import urllib3
 import yt_dlp
 from datetime import datetime
+import random
 
 import sqlalchemy
 import sqlite3
@@ -19,7 +19,37 @@ class VlcCog(commands.Cog):
         self.obs = self.bot.get_cog("ObsCog")
         self.playing_now = None
         self.bot.loop.create_task(self.db_init())
-    
+
+    async def get_media(self, link):
+        # Allow for media from twitter, twitch clips, insta? potentially
+        # WILL NOT ALLOW FOR LINKS WITHOUT MEDIA
+        with yt_dlp.YoutubeDL({}) as ytl:
+            try:
+                info = ytl.extract_info(link, download=False)
+            except yt_dlp.utils.ExtractorError as e:
+                # Return none here
+                return
+
+            formats = info.get('formats')[::-1]
+            # acodec='none' means there is no audio
+            try:
+                best_video = next(f for f in formats
+                            if (f.get('vcodec', 'none') != 'none' and f.get('acodec', 'none') != 'none') 
+                            or (f.get('format_id', None) in ['1080', '720'])) # Twitch clips don't contain codec info
+            except RuntimeError as e:
+                # Stop Iteration
+                return
+            
+            title = info.get('fulltitle') if info.get('fulltitle', None) else info.get('title')
+            uploader = info.get('uploader')
+            play_url = best_video['url']
+            
+            self.playing_now = f"{title} uploaded by {uploader}" #TODO: tie to an event sub of the media player
+            await self.obs._setSourceSettings("vlc_link", {"playlist": [{"value": play_url, 'hidden': False, 'selected': False}]})
+            await self.obs._toggleSource("vlc_link", True)
+
+        return
+
     @commands.command(name="vlc_link", aliases=['link', 'url'])
     async def display_media_vlc(self, ctx: commands.Context, link):
         # TODO QUERY DB TO SEE IF URL ALREADY ADDED
@@ -30,15 +60,25 @@ class VlcCog(commands.Cog):
             queue_pos = queue_pos["max"] if queue_pos else None
 
         with yt_dlp.YoutubeDL({}) as ytl:
-            info = ytl.extract_info(link, download=False)
-
+            try:
+                info = ytl.extract_info(link, download=False)
+            except yt_dlp.utils.ExtractorError as e:
+                # Return none here
+                return
+            
             formats = info.get('formats')[::-1]
             # acodec='none' means there is no audio
-            best_video = next(f for f in formats
-                        if f['vcodec'] != 'none' and f['acodec'] != 'none')
+            try:
+                best_video = next(f for f in formats
+                            if (f.get('vcodec', 'none') != 'none' and f.get('acodec', 'none') != 'none') 
+                            or (f.get('format_id', None) in ['1080', '720'])) # Twitch clips don't contain codec info
+            except StopIteration as e:
+                 # Stop Iteration
+                 await ctx.send("Couldn't find a playable format for this link :(")
+                 return
             
             new_pos = queue_pos + 1 if queue_pos else 1
-            await self.insert_request(id, link, ctx.message.author.display_name, info.get('fulltitle'), info.get('creator'),
+            await self.insert_request(id, link, ctx.message.author.display_name, info.get('fulltitle'), info.get('uploader'),
                          info.get('like_count'), info.get('dislike_count'), queue_position=new_pos)
 
             await ctx.send(f"Added to queue at position {new_pos}")
@@ -62,8 +102,28 @@ class VlcCog(commands.Cog):
 
         return
 
+    @commands.command(name="kbb", aliases=['kate_bush_break'])
+    async def kbb(self, ctx:commands.Context):
+        katebush = { "Running_Up_That_Hill" : "https://www.youtube.com/watch?v=wp43OdtAAkM",
+                    "Wuthering_Heights": "https://www.youtube.com/watch?v=-1pMMIe4hb4"
+                    }
+
+        choice = random.choice(list(katebush.values()))
+        await self.get_media(choice) 
+        return
+
+    @commands.command(name="21st", aliases=['21', 'september'])
+    async def twentyfirst(self, ctx:commands.Context):
+        song = "https://www.youtube.com/watch?v=Gs069dndIYk"
+        await self.get_media(song) 
+        return
+
     @commands.command(name="approve")
     async def approve_request(self, ctx: commands.Context, queue_pos=None):
+        if not ctx.author.is_mod or not ctx.author.is_vip:
+            await ctx.send("Sorry you can't do that")
+            return 
+
         if queue_pos:
             approve_req = """UPDATE requests 
                             SET approved = 'T'
@@ -101,9 +161,9 @@ class VlcCog(commands.Cog):
         url = row["url"]
         playurl = await self.approve_link(url)
         title = row["title"]
-        creator = row["creator"]
+        uploader = row["creator"]
 
-        self.playing_now = f"{title} by {creator}" #TODO: tie to an event sub of the media player
+        self.playing_now = f"{title} uploaded by {uploader}" #TODO: tie to an event sub of the media player
         await self.obs._setSourceSettings("vlc_link", {"playlist": [{"value": playurl, 'hidden': False, 'selected': False}]})
         await self.obs._toggleSource("vlc_link", True)
         
@@ -127,20 +187,24 @@ class VlcCog(commands.Cog):
         
     async def approve_link(self, link):
          with yt_dlp.YoutubeDL({}) as ytl:
-            info = ytl.extract_info(link, download=False)
+            try:
+                info = ytl.extract_info(link, download=False)
+            except yt_dlp.utils.ExtractorError as e:
+                # Return none here
+                return
+
 
             formats = info.get('formats')[::-1]
             # acodec='none' means there is no audio
-            best_video = next(f for f in formats
-                        if f['vcodec'] != 'none' and f['acodec'] != 'none')
-
-        # find compatible audio extension
-        # audio_ext = {'mp4': 'm4a', 'webm': 'webm'}[best_video['ext']]
-        # # vcodec='none' means there is no video
-        # best_audio = next(f for f in formats if (
-        #     f['acodec'] != 'none' and f['vcodec'] == 'none' and f['ext'] == audio_ext))
-
-            url = best_video['url']
+            try:
+                best_video = next(f for f in formats
+                            if (f.get('vcodec', 'none') != 'none' and f.get('acodec', 'none') != 'none') 
+                            or (f.get('format_id', None) in ['1080', '720'])) # Twitch clips don't contain codec info
+            except RuntimeError as e:
+                 # Stop Iteration
+                 return
+            
+            url = best_video.get('url')
             return url
         
 
@@ -165,7 +229,6 @@ class VlcCog(commands.Cog):
         for result in results:
             queue_pos, title, approved = result
             await ctx.send(f"{title} at position {queue_pos}, {approved}")
-        await ctx.send(self.queue)
         return
 
     ############### EVENT CALLBACKS
@@ -173,11 +236,16 @@ class VlcCog(commands.Cog):
         print(eventData)
 
     async def media_playback_started(self, eventData):
+        # Pause other media if playing (spotipy/youtube somehow)
         pass
 
     async def media_playback_ended(self, eventData):
-        if (eventData['inputName'] == 'vlc_link'):
+        if (eventData['inputName'] in ['vlc_link', 'link']):
             self.playing_now = None
+            await self.obs._toggleSource('vlc_link', False) # Turn off video source
+            await self.obs._toggleSource('link', False) # Turn off video source
+        elif (eventData['inputName'] == 'audio'):
+            await self.obs._toggleSource('audio', False)
         pass
 
     #TODO: Make this not a twitch command and call this function on init to register all callbacks 
@@ -185,7 +253,8 @@ class VlcCog(commands.Cog):
     async def register_callbacks(self, ctx:commands.Context):
         self.obs.obs_ws.register_event_callback(self.media_event_callback, "MediaInputActionTriggered")
         self.obs.obs_ws.register_event_callback(self.media_playback_started, "MediaInputPlaybackStarted")
-        self.obs.obs_ws.register_event_callback(self.media_playback_started, "MediaInputPlaybackEnded")
+        self.obs.obs_ws.register_event_callback(self.media_playback_ended, "MediaInputPlaybackEnded")
+        await ctx.send("Callbacks registered")
         return
 
     

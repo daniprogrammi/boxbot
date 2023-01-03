@@ -3,16 +3,23 @@ import json # Note to look at orjson
 from typing import Literal
 from twitchio import AuthenticationError
 from twitchio.ext import commands
+from twitchio.ext import routines
 import urllib3
 import random
 from time import sleep
- 
+import sqlite3
+import aiosqlite 
+
 class GenCog(commands.Cog):
     """ General commands cog """
     def __init__(self, bot):
         self.bot = bot
         self.project_str = None
         self.obs = bot.get_cog("ObsCog")
+        self.vlc = bot.get_cog("VlcCog")
+        self.conn = None
+        self.bot.loop.create_task(self.connect_to_database())
+        
     
     def get_cache(self):
         # TODO: fix this, line 23 fails on json.load
@@ -39,28 +46,56 @@ class GenCog(commands.Cog):
         #TODO: Make a todo command
         pass
 
-    @commands.command(name="box")
-    async def box(self, ctx) -> None:
-        basepath = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(os.curdir))))
-        basepath = os.path.join(basepath, "OBS_Scene_Switch_Assets")
+    async def connect_to_database(self):
+        conn = await aiosqlite.connect("database/box.db")
+        conn.row_factory = sqlite3.Row
+        self.conn = conn
+        return
 
-        choice = random.choice(['audio', 'images', 'videos', 'gifs', 'text'])
+    async def get_urls(self):
+        url_request = """
+            SELECT url FROM requests WHERE approved = 'T';
+            """
+
+        urls_result = await self.conn.execute(url_request)
+        urls = await urls_result.fetchall()
+        await urls_result.close()
+        return urls
+
+    @commands.command(name="box")
+    async def box(self, ctx, choice=None) -> None:
+        """ Display a random piece of saved media
+
+        Args:
+            ctx (commands.Context): Twitchio context object
+        """
+        basepath = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(os.curdir))))
+        basepath = os.path.join(basepath, "OBS_Scene_Switch_Assets") # Path where I store all my random things from the internet
+
+        if not choice:
+            choice = random.choice(['audio', 'images', 'videos', 'gifs', 'text', 'link'])
+        
         path = os.path.join(basepath, choice)
-        value = os.path.join(path, random.choice(os.listdir(path))) if choice != 'text' else None
+        value = os.path.join(path, random.choice(os.listdir(path))) if choice not in ['text', 'link'] else None
+
         if value:
             value = value.replace('/mnt/c/', 'C:\\')
             value = value.replace('/', '\\')
-        if not value:
+        if not value and choice not in ['text', 'link']:
             await ctx.send("Uh-oh the box didn't find anything this time; try again plskthnx")
+            return
 
         if choice == 'audio':
             print("Loading... " + choice)
             #do something with the source called audio
-            
             await self.obs._setSourceSettings("audio", {"local_file": value})
+            
+            # Toggle audio source on and then back off after 10 seconds
             await self.obs._toggleSource("audio", True)
-            sleep()
-            pass
+            sleep(10)
+            await self.obs._toggleSource("audio", False)
+            return
+
         elif choice == 'images':
             print("Loading... " + choice)
             # do something with the source called 'image'
@@ -73,13 +108,17 @@ class GenCog(commands.Cog):
 
             await self.obs._setSourceSettings("image", {"file": value})
             await self.obs._toggleSource("image", True)
+            sleep(30)
+            await self.obs._toggleSource("image", False)
+            return
 
-            pass
         elif choice == 'videos' or choice == 'gifs':
             # use video source
             print("Loading... " + choice)
             await self.obs._setSourceSettings("videos", {"playlist": [{"value": value, 'hidden': False, 'selected': False}]})
             await self.obs._toggleSource("videos", True)
+            # toggle off after duration of clip, get duration of clip... somehow
+            await self.obs._getInputSettings("videos")
 
         elif choice == 'text':
             print("Loading... " + choice)
@@ -98,6 +137,17 @@ class GenCog(commands.Cog):
 
             await ctx.send("What's in the box?")
             await ctx.send(text)
+
+        elif choice == 'link':
+            urls = await self.get_urls()
+            print(urls)
+            if urls and len(urls) == 0:
+                selected_url = "https://www.youtube.com/watch?v=56RsdDNjGI4"
+            else:
+                selected_url = random.choice(urls)
+                selected_url = selected_url["url"]
+            await ctx.send(f"A link from the past... {selected_url}")
+            await self.vlc.get_media(selected_url)
 
         return
 
@@ -118,6 +168,12 @@ class GenCog(commands.Cog):
         else:
             await ctx.send(f"CorgiDerp Shout out to {username} CorgiDerp!! Follow them at {url} I hear they're amazing!")
         return
+
+    @commands.command(name="retrommo", aliases=["retro"])
+    async def retrommo(self, ctx):
+        await ctx.send("Check out RetroMMOs MMO at https://retro-mmo.com/")
+        return
+
 
 
     @commands.command(name="welcome")
@@ -172,6 +228,39 @@ class GenCog(commands.Cog):
             "If you are in need of resources check out https://www.reddit.com/r/auntienetwork and https://www.reddit.com/r/abortion <3")
         return
 
+
+    async def _puerto_rico(self, destination):
+        """Places to donate to in the aftermath of Hurricane Fiona
+
+        Args:
+            ctx (_type_): _description_
+        """
+        
+        await destination.send("Donate to local organizations in Puerto Rico in the aftermath or Hurricane Fiona")
+        await destination.send("I think this Mutual Aid Network is a great place to start: https://www.bsopr.com/")
+        await destination.send("Here's a document of other organizations that you can donate to for both PR and DR: https://docs.google.com/document/d/1hGTkGwqAWZmAK-JUC7aWnHaVenTfWlxAMnUyZ3ON6co/")
+        return
+
+    @routines.routine(seconds=10, iterations=5)
+    async def _pr_routine(self, destination):
+        await self._puerto_rico(destination)
+        return
+
+    @commands.command(name="start_routine")
+    async def start_routines(self, ctx):
+        await self._puerto_rico.start(ctx.channel)
+        return
+
+    @commands.command(name="stop_routine")
+    async def stop_routines(self, ctx):
+        await self._puerto_rico.stop()
+        return
+
+    @commands.command(name='pr', aliases=['puerto_rico'])
+    async def puerto_rico(self, ctx: commands.Context):
+        await self._puerto_rico(ctx.channel)
+        return
+
     @commands.command(name="project")
     async def project(self, ctx):
         """Displays the current project"""
@@ -183,8 +272,9 @@ class GenCog(commands.Cog):
         cache = os.path.join(basepath, "stream-cache.json")
         if self.project_str:
             await ctx.send(self.project_str)
-        elif (os.path.exists(cache)):
-            with json.load(open(cache, 'r')) as stream_cache:
+        elif (os.path.exists(cache) and os.path.getsize(cache) != 0):
+            with open(cache, 'r') as stream_cache:
+                stream_cache = json.load(stream_cache)
                 current_project = stream_cache.get('project', None)
                 if current_project:
                     self.project_str = current_project
@@ -196,17 +286,22 @@ class GenCog(commands.Cog):
     @commands.command(name="chproject")
     async def chproject(self, ctx):
         """Change the project string"""
-        self.project_str = " ".join(ctx.message.content.split()[1:]).capitalize()
-        await ctx.send("Changed project!")
         
-        cache_path, cache = self.get_cache()
-        if cache:
-            cache['project'] = self.project_str
-        else: 
-            cache = {'project': self.project_str}
+        if ctx.author.is_mod:
+            self.project_str = " ".join(ctx.message.content.split()[1:]).capitalize()
+            await ctx.send("Changed project!")
+            
+            cache_path, cache = self.get_cache()
+            if cache:
+                cache['project'] = self.project_str
+            else: 
+                cache = {'project': self.project_str}
 
-        json.dump(cache, open(cache_path, 'w+')) # Store for later    
-        return
+            json.dump(cache, open(cache_path, 'w+')) # Store for later    
+            return
+        else:
+            await ctx.send("No!")
+
 
     @commands.command(name="discord")
     async def discord(self, ctx):

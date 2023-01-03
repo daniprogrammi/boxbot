@@ -1,0 +1,28 @@
+## Modules to work on
+[] PollsManager -- making, reading, ending polls programatically
+[] !help for commands generated from docstring (twitchio contrib)
+[] ChannelPoint redemptions management so that I can clear/refund from chat
+[] and some general bans/timeouts/raids/ -- auto generate raid list; who raided recently, who we've raided recently
+[] overlays --- aquafunk knows I don't but we do need that lighter overlay (like !link but on steroids)
+[] greetings -- profile pics where applicable, twitch clips auto play on user seen
+[] addtobox (probably in girlwithbox)
+
+## Schedule
+[] Wednesday/Thursday nights -- chill bot work/twitchio contrib if possible
+[] Wednesday/Thursday/Sunday nights -- MrRobot! (poll discord)
+[] Saturday mornings/afternoons -- project work
+[] If ever possible throw in some co-working streams here and there
+
+## Priority Q of other projects
+[] Website mvp by end of October ** 
+[] TwitchPlays v2 ~ early November
+[] Twitchio contribs -- kind of happening in parallel
+[] Hacking streams -- TryHackMe, Games ~ late November - mid December
+[] Music (flok) stream -- rest of December
+
+[] Discord.py bot
+[] Kinect coding (+ Unity??/some other visual component)
+
+## Editing!!!
+[] Saturday afternoons; Friday nights
+

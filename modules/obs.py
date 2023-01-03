@@ -126,6 +126,12 @@ class ObsCog(commands.Cog):
         res = await self.make_request(requestName, data)
         return res
 
+    async def _getInputSettings(self, inputName):
+        requestName = "GetInputSettings"
+        data = {"inputName": inputName}
+        res = await self.make_request(requestName, data)
+        return res
+
     async def _setSourceSettings(self, inputName, inputSettings, overlay=True):
         requestName = "SetInputSettings"
         data = {"inputName": inputName, "inputSettings": inputSettings}
