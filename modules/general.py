@@ -15,12 +15,17 @@ class GenCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.project_str = None
-        self.obs = bot.get_cog("ObsCog")
-        self.vlc = bot.get_cog("VlcCog")
+        self.obs = None 
+        self.vlc = None
         self.conn = None
         self.bot.loop.create_task(self.connect_to_database())
         
-    
+    def obs_init(self):
+        self.obs = self.bot.get_cog("ObsCog")
+
+    def vlc_init(self):
+        self.vlc = self.bot.get_cog("VlcCog")
+
     def get_cache(self):
         # TODO: fix this, line 23 fails on json.load
         basepath = os.path.abspath(os.curdir) # parent dir twitch_chatbot
@@ -69,11 +74,23 @@ class GenCog(commands.Cog):
         Args:
             ctx (commands.Context): Twitchio context object
         """
+        
+        self.obs_init()
+        self.vlc_init()
+
         basepath = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(os.curdir))))
         basepath = os.path.join(basepath, "OBS_Scene_Switch_Assets") # Path where I store all my random things from the internet
 
-        if not choice:
-            choice = random.choice(['audio', 'images', 'videos', 'gifs', 'text', 'link'])
+        # Handle for errors with missing obs and vlc 
+        choices = ['audio', 'images', 'videos', 'gifs', 'text', 'link']
+        if not self.obs:
+            choices = ['text']
+
+        if not self.vlc:
+            choices.remove('link')
+
+        if not choice or choice not in choices:
+            choice = random.choice(choices)
         
         path = os.path.join(basepath, choice)
         value = os.path.join(path, random.choice(os.listdir(path))) if choice not in ['text', 'link'] else None
@@ -138,6 +155,7 @@ class GenCog(commands.Cog):
             await ctx.send("What's in the box?")
             await ctx.send(text)
 
+        # Replace addtobox
         elif choice == 'link':
             urls = await self.get_urls()
             print(urls)
@@ -156,6 +174,11 @@ class GenCog(commands.Cog):
         await ctx.send(f"{ctx.message.author.display_name} retreated to the safety of the box 👁️ 👁️ (thank you for the lurk!)")
         return
     
+    @commands.command(name="mastodon")
+    async def mastodon(self, ctx: commands.Context):
+        await ctx.send(f"hachyderm.io/@girlwithbox")
+        return
+
     @commands.command(name="so", aliases=["shoutout"])
     async def shoutout(self, ctx: commands.Context, username):
         user_channel_info = await self.bot.fetch_channel(username)

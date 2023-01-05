@@ -78,6 +78,7 @@ class VlcCog(commands.Cog):
                  return
             
             new_pos = queue_pos + 1 if queue_pos else 1
+
             await self.insert_request(id, link, ctx.message.author.display_name, info.get('fulltitle'), info.get('uploader'),
                          info.get('like_count'), info.get('dislike_count'), queue_position=new_pos)
 
@@ -146,10 +147,18 @@ class VlcCog(commands.Cog):
         await ctx.send(f"Approved ${queue_pos}" if queue_pos else "Approved next in queue!")
         return
 
-
+    async def auto_approve(self, request_id, requestor):
+        # Auto approve links from a requestor if they're long term community member, vip, mod
+        update_cmd = """
+                    UPDATE requests SET approved = 'T' where id=(?); 
+                    """  
+        
+        async with self.conn.execute(update_cmd, request_id) as approve:
+            await self.conn.commit()
 
     @commands.command(name="play")
     async def play_next(self, ctx: commands.Context, queue_pos=None):
+
         if queue_pos:
             find_link = """SELECT * FROM requests WHERE queue_position=(?);"""
             url_req = await self.conn.execute(find_link, queue_pos)
