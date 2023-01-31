@@ -1,4 +1,3 @@
-from gettext import find
 import re
 import aiosqlite
 from numpy import insert
@@ -20,7 +19,7 @@ class VlcCog(commands.Cog):
         self.playing_now = None
         self.bot.loop.create_task(self.db_init())
 
-    async def get_media(self, link):
+    async def get_media(self, link, link_src="vlc_link"):
         # Allow for media from twitter, twitch clips, insta? potentially
         # WILL NOT ALLOW FOR LINKS WITHOUT MEDIA
         with yt_dlp.YoutubeDL({}) as ytl:
@@ -45,8 +44,8 @@ class VlcCog(commands.Cog):
             play_url = best_video['url']
             
             self.playing_now = f"{title} uploaded by {uploader}" #TODO: tie to an event sub of the media player
-            await self.obs._setSourceSettings("vlc_link", {"playlist": [{"value": play_url, 'hidden': False, 'selected': False}]})
-            await self.obs._toggleSource("vlc_link", True)
+            await self.obs._setSourceSettings(f"{link_src}", {"playlist": [{"value": play_url, 'hidden': False, 'selected': False}]})
+            await self.obs._toggleSource(f"{link_src}", True)
 
         return
 
@@ -103,10 +102,41 @@ class VlcCog(commands.Cog):
 
         return
 
+    @commands.command(name="nightride")
+    async def nightride(self, ctx:commands.Context):
+        nightride_link = "https://www.youtube.com/watch?v=cZRj9Sk0IPc"
+        await self.get_media(nightride_link, "nightride")
+        return
+    
+    async def nightridePlay(self):
+        await self.obs._toggleSource("nightride", True)
+        await self.obs.setMedia("nightride", "play")
+        return
+
+    async def nightridePause(self):
+        await self.obs._toggleSource("nightride", False)
+        await self.obs.setMedia("nightride", "stop")
+        return
+
+    @commands.command(name="pause_radio")
+    async def nightride_pause(self, ctx:commands.Context):
+        await self.nightridePause()
+        return
+
+    @commands.command(name="play_radio")
+    async def nightride_play(self, ctx:commands.Context):
+        await self.nightridePlay()
+        return
+
+    # Define some callbacks for nightride    
+
+
     @commands.command(name="kbb", aliases=['kate_bush_break'])
     async def kbb(self, ctx:commands.Context):
         katebush = { "Running_Up_That_Hill" : "https://www.youtube.com/watch?v=wp43OdtAAkM",
-                    "Wuthering_Heights": "https://www.youtube.com/watch?v=-1pMMIe4hb4"
+                    "Wuthering_Heights": "https://www.youtube.com/watch?v=-1pMMIe4hb4",
+                    "The_Sensual_World": "https://www.youtube.com/watch?v=h1DDndY0FLI",
+                    "Cloudbusting": "https://www.youtube.com/watch?v=pllRW9wETzw",
                     }
 
         choice = random.choice(list(katebush.values()))
@@ -158,6 +188,10 @@ class VlcCog(commands.Cog):
 
     @commands.command(name="play")
     async def play_next(self, ctx: commands.Context, queue_pos=None):
+        res = await self.obs._getMediaInputStatus("nightride")
+        
+        if res["mediaState"] == "OBS_MEDIA_STATE_PLAYING":
+            await self.nightridePause()
 
         if queue_pos:
             find_link = """SELECT * FROM requests WHERE queue_position=(?);"""
@@ -173,9 +207,11 @@ class VlcCog(commands.Cog):
         uploader = row["creator"]
 
         self.playing_now = f"{title} uploaded by {uploader}" #TODO: tie to an event sub of the media player
+        self.last_requestor = row["requestor"]
+
         await self.obs._setSourceSettings("vlc_link", {"playlist": [{"value": playurl, 'hidden': False, 'selected': False}]})
         await self.obs._toggleSource("vlc_link", True)
-        
+
         # Update queue_pos subtracting 1 from everything in queue
         update_positions = """
             with all_positions as (
@@ -193,7 +229,7 @@ class VlcCog(commands.Cog):
         ergonomic = "Looks uncomfortable; supposedly better for you???"
 
         return
-        
+
     async def approve_link(self, link):
          with yt_dlp.YoutubeDL({}) as ytl:
             try:
@@ -226,13 +262,19 @@ class VlcCog(commands.Cog):
         
         return
 
+    async def _getQueue(self, columns=['queue_position', 'title', 'approved']):
+        # DANGER 
+        retrieve_queue = f"""
+                            SELECT {','.join("?"*len(columns))} FROM requests WHERE queue_position is NOT NULL;
+                        """
+        async with self.conn.execute(retrieve_queue, columns) as cur:
+            results = await cur.fetchall()
+
+        return results 
+
     @commands.command(name="queue")
     async def getQueue(self, ctx:commands.Context):
-        retrieve_queue = """
-                            SELECT queue_position, title, approved FROM requests WHERE queue_position is NOT NULL;
-                        """
-        async with self.conn.execute(retrieve_queue) as cur:
-            results = await cur.fetchall()
+        results = await self._getQueue()
 
         await ctx.send("Currently in queue:")
         for result in results:
@@ -255,7 +297,10 @@ class VlcCog(commands.Cog):
             await self.obs._toggleSource('link', False) # Turn off video source
         elif (eventData['inputName'] == 'audio'):
             await self.obs._toggleSource('audio', False)
-        pass
+        
+        # Resume radio play
+        await self.nightridePlay()
+        return
 
     #TODO: Make this not a twitch command and call this function on init to register all callbacks 
     @commands.command(name="register_callbacks")

@@ -34,7 +34,7 @@ class GenCog(commands.Cog):
         cache_path = os.path.join(basepath, "stream-cache.json")
             
         try:
-            cache = json.loads(open(cache_path, 'w+'))
+            cache = json.load(open(cache_path))
             return cache_path, cache
         except json.JSONDecodeError as e:
             # Cache is currently empty or invalid
@@ -57,15 +57,46 @@ class GenCog(commands.Cog):
         self.conn = conn
         return
 
-    async def get_urls(self):
+    async def get_urls(self) -> list:
         url_request = """
             SELECT url FROM requests WHERE approved = 'T';
             """
-
         urls_result = await self.conn.execute(url_request)
         urls = await urls_result.fetchall()
         await urls_result.close()
         return urls
+
+    @commands.command(name="gravy")
+    async def gravy(self, ctx: commands.Context) -> None:
+        """hell
+
+        Args:
+            ctx (commands.Context): _description_
+        """
+        self.obs_init()
+        self.vlc_init()
+        
+        basepath = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(os.curdir))))
+        basepath = os.path.join(basepath, "OBS_Scene_Switch_Assets") # Path where I store all my random things from the internet
+        videopath = os.path.join(basepath, "videos")
+        
+        value = os.path.join(videopath, "gravy.mp4")
+
+        if value:
+            value = value.replace('/mnt/c/', 'C:\\')
+            value = value.replace('/', '\\')
+
+            # Pull into another function 
+            await self.obs._setSourceSettings("videos", {"playlist": [{"value": value, 'hidden': False, 'selected': False}]})
+            await self.obs._toggleSource("videos", True)
+            # toggle off after duration of clip, get duration of clip... somehow
+            await self.obs._getInputSettings("videos")
+
+        await ctx.send("My nightmare")
+        return 
+     
+
+
 
     @commands.command(name="box")
     async def box(self, ctx, choice=None) -> None:
@@ -74,7 +105,9 @@ class GenCog(commands.Cog):
         Args:
             ctx (commands.Context): Twitchio context object
         """
-        
+
+        # TODO: Auto mute nightride here
+        #   
         self.obs_init()
         self.vlc_init()
 
@@ -288,20 +321,15 @@ class GenCog(commands.Cog):
     async def project(self, ctx):
         """Displays the current project"""
         
-        # Check project_str then cache
-        basepath = os.path.abspath(os.curdir) # parent dir twitch_chatbot
-        basepath = os.path.join(basepath, "buffers")
-
-        cache = os.path.join(basepath, "stream-cache.json")
+        cache_path, cache = self.get_cache()
+        
         if self.project_str:
             await ctx.send(self.project_str)
-        elif (os.path.exists(cache) and os.path.getsize(cache) != 0):
-            with open(cache, 'r') as stream_cache:
-                stream_cache = json.load(stream_cache)
-                current_project = stream_cache.get('project', None)
-                if current_project:
-                    self.project_str = current_project
-        else:            
+        elif (cache):
+            current_project = cache.get('project', None)
+            self.project_str = current_project 
+
+        if not self.project_str:
             await ctx.send("project not set! set with chproject")
         return
 
@@ -315,11 +343,12 @@ class GenCog(commands.Cog):
             await ctx.send("Changed project!")
             
             cache_path, cache = self.get_cache()
+            
             if cache:
                 cache['project'] = self.project_str
             else: 
                 cache = {'project': self.project_str}
-
+            # TODO: See if this is working
             json.dump(cache, open(cache_path, 'w+')) # Store for later    
             return
         else:

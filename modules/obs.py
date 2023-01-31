@@ -298,6 +298,12 @@ class ObsCog(commands.Cog):
     async def toggleSomething(self, ctx: commands.Context, sourceName):
         await self._toggleSource(sourceName)
         return
+        
+    #NOT YET @commands.command(name="inputActive")
+    async def inputActive(self, ctx:commands.Context, sourceName):
+        await self.make_request(request="InputActiveStateChanged", data={"inputName": f"{sourceName}"})
+        return 
+
 
 
 def main():
