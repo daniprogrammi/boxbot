@@ -247,6 +247,18 @@ class GenCog(commands.Cog):
         await ctx.send("I appreciate everyone who subs, but it's definitely better spent on donations to charity! Check out some of the ones in the commands")
         await self.aapi()  #Edit: Now... I think this should work
         return
+    
+    @commands.command(name="commands")
+    async def commands(self, ctx: commands.Context) -> None:
+        """List of possible commands when using boxbots.
+
+        Args:
+            ctx: TwitchIo commands Context
+
+        Returns:
+            None: None
+        """
+        await ctx.send("All commands are listed here - https://github.com/Danicodes/boxbot/blob/main/README.md")
 
     @commands.command(name="hrc")
     async def hrc(self, ctx):
