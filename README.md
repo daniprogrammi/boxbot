@@ -110,3 +110,4 @@ Twitch bot for my stream -- enabling user participation and a pleasant level of 
 `rate` - Rate the current playing link from the queue.
 
 - Example: `!rate 0`
+ 
